@@ -36,7 +36,7 @@ import org.apache.log4j.Logger;
  * 
  * The script take a random subdir (@see {@link DataStorage#BLOCK_SUBDIR_PREFIX}) leaf (i.e. without other subdir
  * inside) from the most used partition and move it to a random subdir (not exceeding
- * {@link DFSConfigKeys.DFS_DATANODE_NUMBLOCKS_KEY} of the least used partition
+ * {@link DFSConfigKeys.DFS_DATANODE_NUMBLOCKS_KEY}) of the least used partition
  * 
  * The script is doing pretty good job at keeping the bandwidth of the target volume maxed out using
  * {@link FileUtils#moveDirectory(File, File)} and *one* dedicated {@link ExecutorService} for the copy. Increasing the
