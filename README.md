@@ -9,9 +9,8 @@ HDFS-1804 allows the DataNode to choose the least used hard drive, but for new b
 
 # Usage
 
-java -cp volume-balancer-<version>-jar-with-dependencies.jar:/path/to/hdfs-site.conf/parentDir org.apache.hadoop.hdfs.server.datanode.VolumeBalancer [-threshold=0.1]
-
-    the ``threshold`` parameter ensure the newly added disk fills up until the disks average +/- the threshold. By default it's 0.1
+    java -cp volume-balancer-<version>-jar-with-dependencies.jar:/path/to/hdfs-site.conf/parentDir org.apache.hadoop.hdfs.server.datanode.VolumeBalancer [-threshold=0.1]
+        * the ``threshold`` parameter ensure the newly added disk fills up until the disks average +/- the threshold. By default it's 0.1
 
 # How it works
 
