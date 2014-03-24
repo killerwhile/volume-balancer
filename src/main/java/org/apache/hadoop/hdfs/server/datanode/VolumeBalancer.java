@@ -59,10 +59,9 @@ import org.apache.log4j.Logger;
 public class VolumeBalancer {
 
     private static final Logger LOG = Logger.getLogger(VolumeBalancer.class);
-    
+
     private static void usage() {
-        LOG.info("Available options: \n" + " -threshold=d, default 0.1\n"
-            + VolumeBalancer.class.getCanonicalName());
+        LOG.info("Available options: \n" + " -threshold=d, default 0.1\n" + VolumeBalancer.class.getCanonicalName());
     }
 
     private static final Random r = new Random();
@@ -171,8 +170,8 @@ public class VolumeBalancer {
             final Set<Volume> volumes = new LinkedHashSet<Volume>(allVolumes);
 
             /*
-             * Find the least used volume and pick a random subdir folder in that volume, with less that 64 subdir*
-             * folders in it, that will be used as the destination of the move
+             * Find the least used volume and pick a random subdir folder in that volume, with less that 64
+             * (DFS_DATANODE_NUMBLOCKS_KEY) subdir* folders in it, that will be used as the destination of the move
              */
             Volume leastUsedVolume = null;
             for (Volume v : allVolumes) {
@@ -187,7 +186,7 @@ public class VolumeBalancer {
             volumes.remove(leastUsedVolume);
             totalPercentAvailable = totalPercentAvailable / dataDirs.size();
 
-            // Check if the volume is balanced
+            // Check if the volume is balanced (i.e. between totalPercentAvailble +/- threshold)
             if (totalPercentAvailable - threshold < leastUsedVolume.getPercentAvailableSpace()
                 && totalPercentAvailable + threshold > leastUsedVolume.getPercentAvailableSpace()) {
                 LOG.info("Least used volumes is within the threshold, we can stop.");
@@ -195,7 +194,7 @@ public class VolumeBalancer {
                 break;
             }
 
-            File finalizedLeastUsedBlockStorage = generateFinalizeDirInVolume(leastUsedVolume, blockpoolID);
+            final File finalizedLeastUsedBlockStorage = generateFinalizeDirInVolume(leastUsedVolume, blockpoolID);
 
             File leastUsedBlockSubdir = finalizedLeastUsedBlockStorage;
             File tmpLeastUsedBlockSubdir = null;
@@ -209,6 +208,7 @@ public class VolumeBalancer {
                 else {
                     depth++;
                     if (depth > 2) {
+                        // don't do too deep in folders hierarchy.
                         leastUsedBlockSubdir = getRandomSubdir(finalizedLeastUsedBlockStorage);
                     }
                     else {
@@ -230,32 +230,29 @@ public class VolumeBalancer {
             LOG.debug("mostUsedVolume: " + mostUsedVolume + ", "
                 + (int) (mostUsedVolume.getPercentAvailableSpace() * 100) + "% usable");
 
-            File finalizedMostUsedBlockStorage = generateFinalizeDirInVolume(mostUsedVolume, blockpoolID);
+            File mostUsedBlockSubdir = generateFinalizeDirInVolume(mostUsedVolume, blockpoolID);;
 
-            File mostUsedBlockSubdir = null;
-
-            mostUsedBlockSubdir = finalizedMostUsedBlockStorage;
-            File tmp = null;
+            File tmpMostUsedBlockSubdir = null;
             do {
-                tmp = getRandomSubdir(mostUsedBlockSubdir);
-                if (tmp != null) {
-                    mostUsedBlockSubdir = tmp;
+                tmpMostUsedBlockSubdir = getRandomSubdir(mostUsedBlockSubdir);
+                if (tmpMostUsedBlockSubdir != null) {
+                    mostUsedBlockSubdir = tmpMostUsedBlockSubdir;
                 }
             }
-            while (tmp != null);
+            while (tmpMostUsedBlockSubdir != null);
 
             /*
              * Generate the final name of the destination
              */
-            File[] existingSubDirs = findSubdirs(leastUsedBlockSubdir);
+            final File[] existingSubDirs = findSubdirs(leastUsedBlockSubdir);
 
-            File finalLeastUsedBlockSubdir = new File(leastUsedBlockSubdir, DataStorage.BLOCK_SUBDIR_PREFIX
+            final File finalLeastUsedBlockSubdir = new File(leastUsedBlockSubdir, DataStorage.BLOCK_SUBDIR_PREFIX
                 + existingSubDirs.length);
 
             /*
              * Schedule the two subdir for a move.
              */
-            SubdirTransfer st = new SubdirTransfer(mostUsedBlockSubdir, finalLeastUsedBlockSubdir);
+            final SubdirTransfer st = new SubdirTransfer(mostUsedBlockSubdir, finalLeastUsedBlockSubdir);
 
             boolean scheduled = false;
             while (run.get() && !(scheduled = transferQueue.offer(st, 1, TimeUnit.SECONDS))) {
@@ -272,7 +269,7 @@ public class VolumeBalancer {
         // Waiting for all copy thread to finish their current move
         copyExecutor.awaitTermination(10, TimeUnit.MINUTES);
 
-        // TODO: print some reports
+        // TODO: print some reports for your manager
 
         // Let the shutdown thread finishing
         shutdownLatch.countDown();
@@ -381,8 +378,8 @@ public class VolumeBalancer {
 
                     try {
                         FileUtils.moveDirectory(st.from, st.to);
-                        LOG.info("move " + st.from + " to " + st.to + " took "
-                            + (System.currentTimeMillis() - start) + "ms");
+                        LOG.info("move " + st.from + " to " + st.to + " took " + (System.currentTimeMillis() - start)
+                            + "ms");
                     }
                     catch (org.apache.commons.io.FileExistsException e) {
                         // Corner case when the random destination folder has been picked by the previous run
