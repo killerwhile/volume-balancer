@@ -15,10 +15,9 @@
         <compile.source.version>1.6</compile.source.version>
         <hadoop.version>2.0.0-cdh4.5.0</hadoop.version>
         <commons.io.version>2.1</commons.io.version>
-        <!--maven.shade.plugin.version>2.2</maven.shade.plugin.version-->
         <maven.rpm.plugin.version>2.1-alpha-3</maven.rpm.plugin.version>
         <log4j.version>1.2.17</log4j.version>
-        
+        <maven.replacer.version>1.5.2</maven.replacer.version>
         <!-- RPM Spec related -->
         <rpm.appname>${project.artifactId}</rpm.appname>
         <rpm.group>Application/HDFS</rpm.group>
@@ -68,7 +67,7 @@
             <plugin>
                 <groupId>com.google.code.maven-replacer-plugin</groupId>
                 <artifactId>replacer</artifactId>
-                <version>1.5.2</version>
+                <version>${maven.replacer.version}</version>
                 <executions>
                     <execution>
                         <phase>prepare-package</phase>
@@ -92,68 +91,68 @@
                 </configuration>
             </plugin>
             <plugin>
-                    <groupId>org.codehaus.mojo</groupId>
-                    <artifactId>rpm-maven-plugin</artifactId>
-                    <version>${maven.rpm.plugin.version}</version>
-                    <executions>
-                        <execution>
-                            <goals>
-                                <goal>attached-rpm</goal>
-                            </goals>
-                        </execution>
-                    </executions>
-                    <configuration>
-                        <copyright>${rpm.copyright}</copyright>
-                        <distribution>${rpm.distribution}</distribution>
-                        <name>${rpm.appname}</name>
-                        <group>${rpm.group}</group>
-                        <needarch>${rpm.targetArch}</needarch>
-                        <classifier>${rpm.targetos}.${rpm.targetArch}</classifier>
-                        <defineStatements>
-                            <defineStatement>_binaries_in_noarch_packages_terminate_build 0</defineStatement>
-                            <defineStatement>_unpackaged_files_terminate_build 0</defineStatement>
-                        </defineStatements>
-                        <mappings>
-                            <mapping>
-                                <directory>${rpm.path}</directory>
-                                <filemode>0755</filemode>
-                                <username>${rpm.username}</username>
-                                <groupname>${rpm.groupname}</groupname>
-                            </mapping>
-                            <mapping>
-                                <directory>${rpm.path}/bin</directory>
-                                <directoryIncluded>false</directoryIncluded>
-                                <filemode>0755</filemode>
-                                <username>${rpm.username}</username>
-                                <groupname>${rpm.groupname}</groupname>
-                                <sources>
-                                    <source>
-                                        <location>${project.basedir}/src/main/scripts</location>
-                                    </source>
-                                </sources>
-                            </mapping>
-                            <mapping>
-                                <directory>${rpm.path}/lib</directory>
-                                <recurseDirectories>true</recurseDirectories>
-                                <filemode>0755</filemode>
-                                <username>${rpm.username}</username>
-                                <groupname>${rpm.groupname}</groupname>
-                                <sources>
-                                    <source>
-                                        <location>${project.build.directory}/${project.artifactId}-${project.version}.jar</location>
-                                    </source>
-                                </sources>
-                            </mapping>
-                            <mapping>
-                                <directory>${rpm.path}/logs</directory>
-                                <recurseDirectories>true</recurseDirectories>
-                                <filemode>0755</filemode>
-                                <username>${rpm.username}</username>
-                                <groupname>${rpm.groupname}</groupname>
-                            </mapping>
-                        </mappings>
-                    </configuration>
-                </plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>rpm-maven-plugin</artifactId>
+                <version>${maven.rpm.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>attached-rpm</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <copyright>${rpm.copyright}</copyright>
+                    <distribution>${rpm.distribution}</distribution>
+                    <name>${rpm.appname}</name>
+                    <group>${rpm.group}</group>
+                    <needarch>${rpm.targetArch}</needarch>
+                    <classifier>${rpm.targetos}.${rpm.targetArch}</classifier>
+                    <defineStatements>
+                        <defineStatement>_binaries_in_noarch_packages_terminate_build 0</defineStatement>
+                        <defineStatement>_unpackaged_files_terminate_build 0</defineStatement>
+                    </defineStatements>
+                    <mappings>
+                        <mapping>
+                            <directory>${rpm.path}</directory>
+                            <filemode>0755</filemode>
+                            <username>${rpm.username}</username>
+                            <groupname>${rpm.groupname}</groupname>
+                        </mapping>
+                        <mapping>
+                            <directory>${rpm.path}/bin</directory>
+                            <directoryIncluded>false</directoryIncluded>
+                            <filemode>0755</filemode>
+                            <username>${rpm.username}</username>
+                            <groupname>${rpm.groupname}</groupname>
+                            <sources>
+                                <source>
+                                    <location>${project.basedir}/src/main/scripts</location>
+                                </source>
+                            </sources>
+                        </mapping>
+                        <mapping>
+                            <directory>${rpm.path}/lib</directory>
+                            <recurseDirectories>true</recurseDirectories>
+                            <filemode>0755</filemode>
+                            <username>${rpm.username}</username>
+                            <groupname>${rpm.groupname}</groupname>
+                            <sources>
+                                <source>
+                                    <location>${project.build.directory}/${project.artifactId}-${project.version}.jar</location>
+                                </source>
+                            </sources>
+                        </mapping>
+                        <mapping>
+                            <directory>${rpm.path}/logs</directory>
+                            <recurseDirectories>true</recurseDirectories>
+                            <filemode>0755</filemode>
+                            <username>${rpm.username}</username>
+                            <groupname>${rpm.groupname}</groupname>
+                        </mapping>
+                    </mappings>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
