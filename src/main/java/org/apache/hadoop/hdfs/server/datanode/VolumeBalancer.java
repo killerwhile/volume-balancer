@@ -257,8 +257,7 @@ public class VolumeBalancer {
             Volume mostUsedVolume = null;
             do {
                 for (Volume v : volumes) {
-                    if (mostUsedVolume == null || v != leastUsedVolume
-                        || v.getUsableSpace() < mostUsedVolume.getUsableSpace()) {
+                    if (v != leastUsedVolume && (mostUsedVolume == null || v.getUsableSpace() < mostUsedVolume.getUsableSpace())) {
                         mostUsedVolume = v;
                     }
                 }
@@ -452,9 +451,7 @@ public class VolumeBalancer {
                         run.set(false);
                     }
                     finally {
-                        if (st != null) {
-                            volumes.add(st.volume);
-                        }
+                        volumes.add(st.volume);
                     }
                 }
             }
