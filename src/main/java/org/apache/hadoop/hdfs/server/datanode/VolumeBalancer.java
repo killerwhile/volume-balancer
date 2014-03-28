@@ -1,5 +1,7 @@
 package org.apache.hadoop.hdfs.server.datanode;
 
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_DATA_DIR_KEY;
+
 import java.io.File;
 import java.io.FileFilter;
 import java.io.IOException;
@@ -13,6 +15,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -27,6 +30,7 @@ import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.NameNodeProxies;
 import org.apache.hadoop.hdfs.server.common.Storage;
+import org.apache.hadoop.hdfs.server.common.Util;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocol;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.log4j.Logger;
@@ -38,17 +42,27 @@ import org.apache.log4j.Logger;
  * inside) from the most used partition and move it to a random subdir (not exceeding
  * {@link DFSConfigKeys.DFS_DATANODE_NUMBLOCKS_KEY}) of the least used partition
  * 
- * The script is doing pretty good job at keeping the bandwidth of the target volume maxed out using
- * {@link FileUtils#moveDirectory(File, File)} and *one* dedicated {@link ExecutorService} for the copy. Increasing the
- * concurrency of the thread performing the copy does not help at all do a better utilization of the target disk
- * throughput.
+ * The script is doing pretty good job at keeping the bandwidth of the target volume max'ed out using
+ * {@link FileUtils#moveDirectory(File, File)} and a dedicated {@link ExecutorService} for the copy. Increasing the
+ * concurrency of the thread performing the copy does not *always* help to improve disks utilization, more particularly
+ * at the target disk. But if you use -concurrency > 1, the script is balancing the read (if possible) amongst several
+ * disks.
+ * 
+ * $ iostat -x 1 -m
+ *   Device:         rrqm/s   wrqm/s     r/s     w/s    rMB/s    wMB/s avgrq-sz avgqu-sz   await  svctm  %util
+ *   sdd               0.00     0.00    0.00    0.00     0.00     0.00     0.00     0.00    0.00   0.00   0.00
+ *   sde               0.00 32911.00    0.00  300.00     0.00   149.56  1020.99   138.72  469.81   3.34 100.00
+ *   sdf               0.00    27.00  963.00   50.00   120.54     0.30   244.30     1.37    1.35   0.80  80.60
+ *   sdg               0.00     0.00    0.00    0.00     0.00     0.00     0.00     0.00    0.00   0.00   0.00
+ *   sdh               0.00     0.00  610.00    0.00    76.25     0.00   255.99     1.45    2.37   1.44  88.10
+ *   sdi               0.00     0.00    0.00    0.00     0.00     0.00     0.00     0.00    0.00   0.00   0.00
  * 
  * Once all disks reach the disks average utilization +/- threshold (can be given as input parameter, by default 0.1)
  * the script stops. But it can also be safely stopped at any time hitting Crtl+C: it shuts down properly when ALL
  * blocks of a subdir are moved, leaving the datadirs in a proper state
  * 
  * Usage: java -cp volume-balancer-1.0.0-SNAPSHOT-jar-with-dependencies.jar:/path/to/hdfs-site.conf/parentDir
- * org.apache.hadoop.hdfs.server.datanode.VolumeBalancer [-threshold=0.1]
+ * org.apache.hadoop.hdfs.server.datanode.VolumeBalancer [-threshold=0.1] [-concurrency=1]
  * 
  * Disk bandwidth can be easily monitored using $ iostat -x 1 -m
  * 
@@ -61,13 +75,14 @@ public class VolumeBalancer {
     private static final Logger LOG = Logger.getLogger(VolumeBalancer.class);
 
     private static void usage() {
-        LOG.info("Available options: \n" + " -threshold=d, default 0.1\n" + VolumeBalancer.class.getCanonicalName());
+        LOG.info("Available options: \n" + " -threshold=d, default 0.1\n -concurrency=n, default 1\n"
+            + VolumeBalancer.class.getCanonicalName());
     }
 
     private static final Random r = new Random();
-    private static final int CONCURRENCY = 1;
+    private static final int DEFAULT_CONCURRENCY = 1;
 
-    static class Volume {
+    static class Volume implements Comparable<Volume> {
         private final URI uri;
         private final File uriFile;
 
@@ -92,21 +107,29 @@ public class VolumeBalancer {
         public String toString() {
             return this.getClass().getName() + "{" + uri + "}";
         }
+
+        @Override
+        public int compareTo(Volume arg0) {
+            return uri.compareTo(arg0.uri);
+        }
     }
 
     static class SubdirTransfer {
         final File from;
         final File to;
+        final Volume volume;
 
-        public SubdirTransfer(final File from, final File to) {
+        public SubdirTransfer(final File from, final File to, final Volume volume) {
             this.from = from;
             this.to = to;
+            this.volume = volume;
         }
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
 
         double threshold = 0.1;
+        int concurrency = DEFAULT_CONCURRENCY;
 
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
@@ -114,6 +137,12 @@ public class VolumeBalancer {
                 String[] split = arg.split("=");
                 if (split.length > 1) {
                     threshold = Double.parseDouble(split[1]);
+                }
+            }
+            else if (arg.startsWith("-concurrency")) {
+                String[] split = arg.split("=");
+                if (split.length > 1) {
+                    concurrency = Integer.parseInt(split[1]);
                 }
             }
             else {
@@ -125,21 +154,6 @@ public class VolumeBalancer {
 
         LOG.info("Threshold is " + threshold);
 
-        // The actual copy is done in a dedicated thread, polling a blocking queue for new source and target directory
-        final ExecutorService copyExecutor = Executors.newFixedThreadPool(CONCURRENCY);
-        final BlockingQueue<SubdirTransfer> transferQueue = new LinkedBlockingQueue<SubdirTransfer>(CONCURRENCY);
-        final AtomicBoolean run = new AtomicBoolean(true);
-        final CountDownLatch shutdownLatch = new CountDownLatch(1);
-
-        Runtime.getRuntime().addShutdownHook(new WaitForProperShutdown(shutdownLatch, run));
-
-        for (int i = 0; i < CONCURRENCY; i++) {
-            copyExecutor.execute(new SubdirCopyRunner(run, transferQueue));
-        }
-
-        // no other runnables accepted for this TP.
-        copyExecutor.shutdown();
-
         // Hadoop *always* need a configuration :)
         final HdfsConfiguration conf = new HdfsConfiguration();
 
@@ -147,12 +161,16 @@ public class VolumeBalancer {
 
         LOG.info("BlockPoolId is " + blockpoolID);
 
-        final Collection<URI> dataDirs = DataNode.getStorageDirs(conf);
+        final Collection<URI> dataDirs = getStorageDirs(conf);
 
         if (dataDirs.size() < 2) {
             LOG.error("Not enough data dirs to rebalance: " + dataDirs);
             return;
         }
+
+        concurrency = Math.min(concurrency, dataDirs.size() - 1);
+
+        LOG.info("Concurrency is " + concurrency);
 
         final int maxBlocksPerDir = conf.getInt(DFSConfigKeys.DFS_DATANODE_NUMBLOCKS_KEY,
             DFSConfigKeys.DFS_DATANODE_NUMBLOCKS_DEFAULT);
@@ -163,11 +181,28 @@ public class VolumeBalancer {
             allVolumes.add(v);
         }
 
+        final Set<Volume> volumes = Collections.newSetFromMap(new ConcurrentSkipListMap<Volume, Boolean>());
+        volumes.addAll(allVolumes);
+
+        // The actual copy is done in a dedicated thread, polling a blocking queue for new source and target directory
+        final ExecutorService copyExecutor = Executors.newFixedThreadPool(concurrency);
+        final BlockingQueue<SubdirTransfer> transferQueue = new LinkedBlockingQueue<SubdirTransfer>(concurrency);
+        final AtomicBoolean run = new AtomicBoolean(true);
+        final CountDownLatch shutdownLatch = new CountDownLatch(1);
+
+        Runtime.getRuntime().addShutdownHook(new WaitForProperShutdown(shutdownLatch, run));
+
+        for (int i = 0; i < concurrency; i++) {
+            copyExecutor.execute(new SubdirCopyRunner(run, transferQueue, volumes));
+        }
+
+        // no other runnables accepted for this TP.
+        copyExecutor.shutdown();
+
         boolean balanced = false;
         do {
 
             double totalPercentAvailable = 0;
-            final Set<Volume> volumes = new LinkedHashSet<Volume>(allVolumes);
 
             /*
              * Find the least used volume and pick a random subdir folder in that volume, with less that 64
@@ -183,7 +218,6 @@ public class VolumeBalancer {
             LOG.debug("leastUsedVolume: " + leastUsedVolume + ", "
                 + (int) (leastUsedVolume.getPercentAvailableSpace() * 100) + "% usable");
 
-            volumes.remove(leastUsedVolume);
             totalPercentAvailable = totalPercentAvailable / dataDirs.size();
 
             // Check if the volume is balanced (i.e. between totalPercentAvailble +/- threshold)
@@ -222,15 +256,36 @@ public class VolumeBalancer {
              * Find the most used volume and pick a random subdir folder what will be used as a source of move
              */
             Volume mostUsedVolume = null;
-            for (Volume v : volumes) {
-                if (mostUsedVolume == null || v.getUsableSpace() < mostUsedVolume.getUsableSpace()) {
-                    mostUsedVolume = v;
+            do {
+                for (Volume v : volumes) {
+                    if (mostUsedVolume == null || v != leastUsedVolume
+                        || v.getUsableSpace() < mostUsedVolume.getUsableSpace()) {
+                        mostUsedVolume = v;
+                    }
+                }
+                if (mostUsedVolume == null) {
+                    // All the drives are used for a copy. Maybe concurrency might be slightly reduced
+                    try {
+                        Thread.sleep(100);
+                    }
+                    catch (InterruptedException e) {
+                        break;
+                    }
                 }
             }
+            while (mostUsedVolume == null);
+
+            if (!run.get()) {
+                break;
+            }
+
+            // Remove it for next iteration
+            volumes.remove(mostUsedVolume);
+
             LOG.debug("mostUsedVolume: " + mostUsedVolume + ", "
                 + (int) (mostUsedVolume.getPercentAvailableSpace() * 100) + "% usable");
 
-            File mostUsedBlockSubdir = generateFinalizeDirInVolume(mostUsedVolume, blockpoolID);;
+            File mostUsedBlockSubdir = generateFinalizeDirInVolume(mostUsedVolume, blockpoolID);
 
             File tmpMostUsedBlockSubdir = null;
             do {
@@ -252,7 +307,7 @@ public class VolumeBalancer {
             /*
              * Schedule the two subdir for a move.
              */
-            final SubdirTransfer st = new SubdirTransfer(mostUsedBlockSubdir, finalLeastUsedBlockSubdir);
+            final SubdirTransfer st = new SubdirTransfer(mostUsedBlockSubdir, finalLeastUsedBlockSubdir, mostUsedVolume);
 
             boolean scheduled = false;
             while (run.get() && !(scheduled = transferQueue.offer(st, 1, TimeUnit.SECONDS))) {
@@ -355,10 +410,12 @@ public class VolumeBalancer {
 
         private final BlockingQueue<SubdirTransfer> transferQueue;
         private final AtomicBoolean run;
+        private final Set<Volume> volumes;
 
-        public SubdirCopyRunner(AtomicBoolean b, BlockingQueue<SubdirTransfer> bq) {
+        public SubdirCopyRunner(AtomicBoolean b, BlockingQueue<SubdirTransfer> bq, Set<Volume> v) {
             this.transferQueue = bq;
             this.run = b;
+            this.volumes = v;
         }
 
         @Override
@@ -395,10 +452,20 @@ public class VolumeBalancer {
                         e.printStackTrace();
                         run.set(false);
                     }
+                    finally {
+                        if (st != null) {
+                            volumes.add(st.volume);
+                        }
+                    }
                 }
             }
 
             LOG.info(this.getClass().getName() + " shut down properly.");
         }
+    }
+
+    static Collection<URI> getStorageDirs(Configuration conf) {
+        Collection<String> dirNames = conf.getTrimmedStringCollection(DFS_DATANODE_DATA_DIR_KEY);
+        return Util.stringCollectionAsURIs(dirNames);
     }
 }
