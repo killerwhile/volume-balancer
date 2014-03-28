@@ -65,23 +65,32 @@
                     <target>${compile.source.version}</target>
                 </configuration>
             </plugin>
-            <!--plugin>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <version>${maven.assembly.version}</version>
-                <configuration>
-                  <descriptorRefs>
-                      <descriptorRef>jar-with-dependencies</descriptorRef>
-                  </descriptorRefs>
-                </configuration>
+            <plugin>
+                <groupId>com.google.code.maven-replacer-plugin</groupId>
+                <artifactId>replacer</artifactId>
+                <version>1.5.2</version>
                 <executions>
                     <execution>
-                        <phase>package</phase> 
+                        <phase>prepare-package</phase>
                         <goals>
-                            <goal>single</goal>
+                            <goal>replace</goal>
                         </goals>
                     </execution>
                 </executions>
-            </plugin-->
+                <configuration>
+                    <file>${project.basedir}/src/main/scripts/cdh-balance-local-volumes.sh</file>
+                    <replacements>
+                        <replacement>
+                            <token>@@ROOT_FOLDER@@</token>
+                            <value>${rpm.path}</value>
+                        </replacement>
+                        <replacement>
+                            <token>@@VERSION@@</token>
+                            <value>${project.version}</value>
+                        </replacement>
+                    </replacements>
+                </configuration>
+            </plugin>
             <plugin>
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>rpm-maven-plugin</artifactId>
@@ -107,33 +116,6 @@
                         <mappings>
                             <mapping>
                                 <directory>${rpm.path}</directory>
-                                <filemode>0755</filemode>
-                                <username>${rpm.username}</username>
-                                <groupname>${rpm.groupname}</groupname>
-                            </mapping>
-                            <mapping>
-                                <configuration>true</configuration>
-                                <directory>${rpm.path}/config</directory>
-                                <recurseDirectories>true</recurseDirectories>
-                                <filemode>0755</filemode>
-                                <username>${rpm.username}</username>
-                                <groupname>${rpm.groupname}</groupname>
-                            </mapping>
-                            <mapping>
-                                <directory>${rpm.path}/config</directory>
-                                <recurseDirectories>true</recurseDirectories>
-                                <filemode>0755</filemode>
-                                <username>${rpm.username}</username>
-                                <groupname>${rpm.groupname}</groupname>
-                                <sources>
-                                    <source>
-                                        <location>${project.basedir}/src/main/resources</location>
-                                    </source>
-                                </sources>
-                            </mapping>
-                            <mapping>
-                                <directory>${rpm.path}/bin</directory>
-                                <recurseDirectories>true</recurseDirectories>
                                 <filemode>0755</filemode>
                                 <username>${rpm.username}</username>
                                 <groupname>${rpm.groupname}</groupname>
