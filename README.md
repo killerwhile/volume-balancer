@@ -9,18 +9,25 @@ This project aims at filling the gap with [HDFS-1312](https://issues.apache.org/
 
 ## Using hadoop jar
 
-    $ hadoop jar /var/lib/volume-balancer/lib/volume-balancer-<version>.jar org.apache.hadoop.hdfs.server.datanode.VolumeBalancer [-threshold=0.1] [-concurrency=1]
+```
+$ hadoop jar /var/lib/volume-balancer/lib/volume-balancer-<version>.jar org.apache.hadoop.hdfs.server.datanode.VolumeBalancer [-threshold=0.1] [-concurrency=1]
+```
 
 ## Using plain java
 
-    $ java -cp /var/lib/volume-balancer/lib/volume-balancer-<version>.jar:/path/to/hdfs-site.xml/parentDir:$(find $(hadoop classpath | sed -e "s/:/ /g") -maxdepth 0 2>/dev/null | paste -d ":" -s -
-) org.apache.hadoop.hdfs.server.datanode.VolumeBalancer [-threshold=0.1] [-concurrency=1]
+(But still ``hadoop classpath`` for automatic jars detection)
+
+```
+$ java -cp /var/lib/volume-balancer/lib/volume-balancer-<version>.jar:/path/to/hdfs-site.xml/parentDir:$(find $(hadoop classpath | sed -e "s/:/ /g") -maxdepth 0 2>/dev/null | paste -d ":" -s -) org.apache.hadoop.hdfs.server.datanode.VolumeBalancer [-threshold=0.1] [-concurrency=1]
+```
 
 ## With CDH
 
 Cloudera is splitting the configuration files and store in _/etc/hadoop/conf_ only strict minimum. ``dfs.datanode.data.dir`` for instance is not found in _/etc/hadoop/conf/hdfs-site.xml_ so a workaround needs to be put in place. Moreover, once you found the proper _/var/run/cloudera-scm-agent/process_ folder to add in your classpath, you need to skip the _log4j.properties_ file shipped otherwise you'll start a custom proprietary logger. A helper script is given in _src/main/scripts_ folder, which run the balancer in CDH distributions.
 
-    $ /var/lib/volume-balancer/bin/cdh-balance-local-volumes.sh [-threshold=0.1] [-concurrency=1]
+```
+$ /var/lib/volume-balancer/bin/cdh-balance-local-volumes.sh [-threshold=0.1] [-concurrency=1]
+```
 
 # Parameters
 
