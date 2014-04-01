@@ -17,11 +17,11 @@
         <commons.io.version>2.1</commons.io.version>
         <maven.rpm.plugin.version>2.1-alpha-3</maven.rpm.plugin.version>
         <log4j.version>1.2.17</log4j.version>
-        <maven.replacer.version>1.5.2</maven.replacer.version>
+        <maven.resources.version>2.6</maven.resources.version>
         <!-- RPM Spec related -->
         <rpm.appname>${project.artifactId}</rpm.appname>
         <rpm.group>Application/HDFS</rpm.group>
-        <rpm.path>/var/lib/volume-balancer</rpm.path>
+        <rpm.path>/opt/${project.name}</rpm.path>
         <rpm.logdirpath>${rpm.path}/logs</rpm.logdirpath>
         <rpm.username>hdfs</rpm.username>
         <rpm.groupname>hdfs</rpm.groupname>
@@ -65,30 +65,26 @@
                 </configuration>
             </plugin>
             <plugin>
-                <groupId>com.google.code.maven-replacer-plugin</groupId>
-                <artifactId>replacer</artifactId>
-                <version>${maven.replacer.version}</version>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>${maven.resources.version}</version>
                 <executions>
                     <execution>
-                        <phase>prepare-package</phase>
+                        <id>copy-resources</id>
+                        <phase>validate</phase>
                         <goals>
-                            <goal>replace</goal>
+                            <goal>copy-resources</goal>
                         </goals>
+                        <configuration>
+                            <outputDirectory>${project.basedir}/target/scripts</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>src/main/scripts</directory>
+                                    <filtering>true</filtering>
+                                </resource>
+                            </resources>
+                        </configuration>
                     </execution>
                 </executions>
-                <configuration>
-                    <file>${project.basedir}/src/main/scripts/cdh-balance-local-volumes.sh</file>
-                    <replacements>
-                        <replacement>
-                            <token>@@ROOT_FOLDER@@</token>
-                            <value>${rpm.path}</value>
-                        </replacement>
-                        <replacement>
-                            <token>@@VERSION@@</token>
-                            <value>${project.version}</value>
-                        </replacement>
-                    </replacements>
-                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
@@ -127,7 +123,7 @@
                             <groupname>${rpm.groupname}</groupname>
                             <sources>
                                 <source>
-                                    <location>${project.basedir}/src/main/scripts</location>
+                                    <location>${project.basedir}/target/scripts</location>
                                 </source>
                             </sources>
                         </mapping>
