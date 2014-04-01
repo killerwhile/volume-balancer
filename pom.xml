@@ -10,13 +10,33 @@
     <description>DataNode Volumes Rebalancing Tool for Apache Hadoop HDFS</description>
     <name>volume-balancer</name>
 
+    <url>http://github.com/killerwhile/volume-balancer</url>
+
+    <developers>
+        <developer>
+            <id>killerwhile</id>
+            <name>Benoit Perroud</name>
+            <email>benoit@noisette.ch</email>
+        </developer>
+    </developers>
+
+    <licenses>
+        <license>
+            <name>Apache License 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
     <properties>
-        <maven.compiler>3.1</maven.compiler>
-        <compile.source.version>1.6</compile.source.version>
         <hadoop.version>2.0.0-cdh4.5.0</hadoop.version>
         <commons.io.version>2.1</commons.io.version>
-        <maven.rpm.plugin.version>2.1-alpha-3</maven.rpm.plugin.version>
         <log4j.version>1.2.17</log4j.version>
+
+        <compile.source.version>1.6</compile.source.version>
+
+        <maven.compiler>3.1</maven.compiler>
+        <maven.rpm.plugin.version>2.1-alpha-3</maven.rpm.plugin.version>
         <maven.resources.version>2.6</maven.resources.version>
         <!-- RPM Spec related -->
         <rpm.appname>${project.artifactId}</rpm.appname>
