@@ -6,7 +6,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.apache.hadoop.hdfs.datanode</groupId>
     <artifactId>volume-balancer</artifactId>
-    <version>1.1-SNAPSHOT</version>
+    <version>1.1.0</version>
     <description>DataNode Volumes Rebalancing Tool for Apache Hadoop HDFS</description>
     <name>volume-balancer</name>
 
