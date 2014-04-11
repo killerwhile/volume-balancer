@@ -183,6 +183,21 @@ public class VolumeBalancer {
         final Set<Volume> volumes = Collections.newSetFromMap(new ConcurrentSkipListMap<Volume, Boolean>());
         volumes.addAll(allVolumes);
 
+        // Ensure all finalized folders exists
+        boolean dataDirError = false;
+        for (Volume v : allVolumes) {
+            final File f = generateFinalizeDirInVolume(v, blockpoolID);
+            if (!f.isDirectory()) {
+                if (!f.mkdirs()) {
+                    LOG.error("Failed creating " + f + ". Please check configuration and permissions");
+                    dataDirError = true;
+                }
+            }
+        }
+        if (dataDirError) {
+            System.exit(3);
+        }
+        
         // The actual copy is done in a dedicated thread, polling a blocking queue for new source and target directory
         final ExecutorService copyExecutor = Executors.newFixedThreadPool(concurrency);
         final BlockingQueue<SubdirTransfer> transferQueue = new LinkedBlockingQueue<SubdirTransfer>(concurrency);
@@ -230,26 +245,30 @@ public class VolumeBalancer {
             final File finalizedLeastUsedBlockStorage = generateFinalizeDirInVolume(leastUsedVolume, blockpoolID);
 
             File leastUsedBlockSubdir = finalizedLeastUsedBlockStorage;
-            File tmpLeastUsedBlockSubdir = null;
-            int depth = 0;
-            do {
-                tmpLeastUsedBlockSubdir = findRandomSubdirWithAvailableSeat(leastUsedBlockSubdir, maxBlocksPerDir);
-
-                if (tmpLeastUsedBlockSubdir != null) {
-                    leastUsedBlockSubdir = tmpLeastUsedBlockSubdir;
-                }
-                else {
-                    depth++;
-                    if (depth > 2) {
-                        // don't do too deep in folders hierarchy.
-                        leastUsedBlockSubdir = getRandomSubdir(finalizedLeastUsedBlockStorage);
+            
+            // Try to store the subdir in the finalized folder first.
+            if (!hasAvailableSeat(leastUsedBlockSubdir, maxBlocksPerDir)) {
+                File tmpLeastUsedBlockSubdir = null;
+                int depth = 0;
+                do {
+                    tmpLeastUsedBlockSubdir = findRandomSubdirWithAvailableSeat(leastUsedBlockSubdir, maxBlocksPerDir);
+    
+                    if (tmpLeastUsedBlockSubdir != null) {
+                        leastUsedBlockSubdir = tmpLeastUsedBlockSubdir;
                     }
                     else {
-                        leastUsedBlockSubdir = getRandomSubdir(leastUsedBlockSubdir);
+                        depth++;
+                        if (depth > 2) {
+                            // don't do too deep in folders hierarchy.
+                            leastUsedBlockSubdir = getRandomSubdir(finalizedLeastUsedBlockStorage);
+                        }
+                        else {
+                            leastUsedBlockSubdir = getRandomSubdir(leastUsedBlockSubdir);
+                        }
                     }
                 }
+                while (tmpLeastUsedBlockSubdir == null);
             }
-            while (tmpLeastUsedBlockSubdir == null);
 
             /*
              * Find the most used volume and pick a random subdir folder what will be used as a source of move
@@ -351,21 +370,26 @@ public class VolumeBalancer {
     }
 
     private static File findRandomSubdirWithAvailableSeat(File parent, int maxBlocksPerDir) {
-
-        List<File> subdirs = Arrays.asList(findSubdirs(parent));
+        File[] subdirsArray = findSubdirs(parent);
+        if (subdirsArray == null) {
+            return null;
+        }
+        List<File> subdirs = Arrays.asList(subdirsArray);
         Collections.shuffle(subdirs);
 
         for (File subdir : subdirs) {
-
-            File[] existingSubdirs = findSubdirs(subdir);
-
-            if (existingSubdirs.length < maxBlocksPerDir) {
+            if (hasAvailableSeat(subdir, maxBlocksPerDir)) {
                 return subdir;
             }
         }
         return null;
     }
 
+    private static boolean hasAvailableSeat(File subdir, int maxBlocksPerDir) {
+        final File[] existingSubdirs = findSubdirs(subdir);
+        return existingSubdirs.length < maxBlocksPerDir;
+    }
+    
     private static String getBlockPoolID(Configuration conf) throws IOException {
 
         final Collection<URI> namenodeURIs = DFSUtil.getNsServiceRpcUris(conf);
