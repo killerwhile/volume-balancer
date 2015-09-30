@@ -63,7 +63,7 @@ blocks** of a ``subdir`` are moved, leaving the datadirs in a proper state.
 
 # Monitoring
 
-Appart of the standard ``df -h`` command to monitor disks fulling in, the disk bandwidths can be easily monitored using ``iostat -x 1 -m``
+Apart of the standard ``df -h`` command to monitor disks fulling in, the disk bandwidths can be easily monitored using ``iostat -x 1 -m``
 
 ```
 $ iostat -x 1 -m
