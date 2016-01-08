@@ -1,6 +1,14 @@
 DataNode Volumes Rebalancing tool for Apache Hadoop HDFS
 ===============
 
+
+**WARNING**: If you're running Hadoop 2.6+, this tool is no longer working! See [HDFS-6482](https://issues.apache.org/jira/browse/HDFS-6482) for more details.
+====
+
+
+
+
+
 This project aims at filling the gap with [HDFS-1312](https://issues.apache.org/jira/browse/HDFS-1312) & family: when a hard drive dies on a Datanode and gets replaced, there is not real way to move blocks from most used hard disks to the newly added -- and thus empty.
 
 [HDFS-1804](https://issues.apache.org/jira/browse/HDFS-1804) is a really good addition that allows the DataNode to choose the least used hard drive, but for new blocks only. Balancing existing blocks is still something missing and thus the main focus of this project.
