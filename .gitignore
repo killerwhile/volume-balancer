@@ -4,3 +4,8 @@
 *.jar
 *.war
 *.ear
+target
+log
+logs
+*.iml
+.idea
